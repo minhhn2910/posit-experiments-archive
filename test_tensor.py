@@ -26,34 +26,4 @@ print (b)
 
 exit()
 
-#getting binary representatation of num
-INVBER=100
-import random
-random.seed()
-total_elements = 384000
-total_bits = total_elements * 32
-ones = int(total_bits/INVBER)
-zeroes = total_bits - ones
-ones_list = ['1']*ones
-zeroes_lists = ['0']*zeroes
-ones_list.extend(zeroes_lists)
-full_list = np.array(ones_list)
-assert(len (full_list) == total_bits)
-random.shuffle(full_list)
-full_list = full_list.reshape(-1,32)
-int_list = np.apply_along_axis(lambda x: int("".join(x),2), 1 , full_list)
-seed_tensor = torch.tensor(int_list, dtype=torch.int)
 
-from ttictoc import TicToc
-t = TicToc() ## TicToc("name")
-t.tic();
-
-#print (full_list)
-#reshape to int 32 bits
-
-#print (int_list)
-random.shuffle(int_list)
-#ber_uniform_np(input_arr,int_list)
-a = custom_module.ber_uniform(input_tensor.cuda(), seed_tensor.cuda())
-t.toc();
-print(str(t.elapsed) + " seconds ")
