@@ -132,10 +132,10 @@ class MNASNet(torch.nn.Module):
 
     def __init__(self, alpha, num_classes=1000, dropout=0.2):
         super(MNASNet, self).__init__()
-        self.custom_module = load(name='ber_uniform', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/benchmarks_posit/posit_cuda.cpp', '/home/minh/benchmarks_posit/posit_cuda_kernels.cu'])
         import random
         random.seed(42)
-        self.total_elements = 40000000
+        self.total_elements = 10000
         total_bits = self.total_elements * 32
         self.ones = int(total_bits*BER)#int(float(total_bits)/INVBER)
         print ('total bits ', total_bits )
@@ -184,7 +184,7 @@ class MNASNet(torch.nn.Module):
         #x = self.layers(x)
         # Equivalent to global avgpool and removing H and W dimensions.
         # start_time = time.time()
-        self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
+        #self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
         count  = 0
         for item in self.layers:
             count = count +1

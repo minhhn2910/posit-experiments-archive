@@ -31,7 +31,8 @@ class Fire(nn.Module):
     def __init__(self, inplanes, squeeze_planes,
                  expand1x1_planes, expand3x3_planes, seed_tensor = None):
         super(Fire, self).__init__()
-        self.custom_module = load(name='ber_module', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
+        #self.custom_module = load(name='ber_module', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/benchmarks_posit/posit_cuda.cpp', '/home/minh/benchmarks_posit/posit_cuda_kernels.cu'])
 
         self.inplanes = inplanes
         self.seed_tensor = seed_tensor
@@ -85,11 +86,12 @@ class SqueezeNet(nn.Module):
     def __init__(self, version=1.0, num_classes=1000):
         super(SqueezeNet, self).__init__()
 
-        self.custom_module = load(name='ber_module', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
+        #self.custom_module = load(name='ber_module', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/benchmarks_posit/posit_cuda.cpp', '/home/minh/benchmarks_posit/posit_cuda_kernels.cu'])
 
         import random
         random.seed(42)
-        self.total_elements = 20000000
+        self.total_elements = 1000
         total_bits = self.total_elements * 32
         self.ones = int(total_bits*BER)#int(float(total_bits)/INVBER)
         print ('total bits ', total_bits )
@@ -158,7 +160,7 @@ class SqueezeNet(nn.Module):
 
     def forward(self, x):
         # start_time = time.time()
-        self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
+        #self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
         x = self.features(x)
         x = self.custom_module.ber_wrapper(x,self.seed_tensor)
         x = self.classifier(x)

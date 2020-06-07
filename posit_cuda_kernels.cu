@@ -14,7 +14,7 @@
 #define FP16_LIMB_SIZE 16
 #define FP16_TYPE uint16_t
 
-#define _G_NBITS 8
+#define _G_NBITS 10
 #define _G_ESIZE 2
 
 #define SIGN_MASK 0x8000
@@ -662,7 +662,7 @@ torch::Tensor posit_cuda(
     input_size = input_size * input.sizes()[i];
   //std::cout<< " state_size "<< input_size<<"\n";
   //auto output = torch::ones_like(input);
-  std::cout<< " posit format "<< _G_NBITS << " " << _G_ESIZE << "\n";
+//  std::cout<< " posit format "<< _G_NBITS << " " << _G_ESIZE << "\n";
   const int threads = 1024;
   const dim3 blocks((input_size + threads - 1) / threads);
 

@@ -150,11 +150,12 @@ class ResNet(nn.Module):
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(ResNet, self).__init__()
-        self.custom_module = load(name='ber_module', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
+        #self.custom_module = load(name='ber_module', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/benchmarks_posit/posit_cuda.cpp', '/home/minh/benchmarks_posit/posit_cuda_kernels.cu'])
 
         import random
         random.seed(42)
-        self.total_elements = 40000000
+        self.total_elements = 10000
         total_bits = self.total_elements * 32
         self.ones = int(total_bits*BER)#int(float(total_bits)/INVBER)
         print ('total bits ', total_bits )
@@ -241,7 +242,7 @@ class ResNet(nn.Module):
     def _forward(self, x):
         # idx = torch.randperm(self.seed_tensor.nelement())
         # start_time = time.time()
-        self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
+        #self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
         if(self.num_flip_bits != 0):
             x = self.custom_module.ber_wrapper(x,self.seed_tensor)
         x = self.conv1(x)

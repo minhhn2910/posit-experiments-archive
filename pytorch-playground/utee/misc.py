@@ -195,14 +195,13 @@ def eval_model(model, ds, n_sample=None, ngpu=1, is_imagenet=False):
         for name, param in state_dict.items():
             if (param.dtype != torch.float32):
                 continue
-            if (weight_count % 10 == 0):
-                model.seed_tensor = model.refresh_tensor(model.ones, model.total_elements)
-            transformed_param = model.custom_module.ber_wrapper_weight(param,model.seed_tensor)
+
+            transformed_param = model.custom_module.ber_wrapper(param,model.seed_tensor)
             weight_count = weight_count + 1
             # Update the parameter.
             state_dict[name].copy_(transformed_param)
     print ("weight layers " + str(weight_count))
-    exit()
+    #exit()
     if is_imagenet:
         model = ModelWrapper(model)
     model = model.eval()
