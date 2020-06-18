@@ -3,7 +3,10 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
-import time
+import numpy as np
+def np_to_str(arr):
+    res= list(map(lambda x: str(x), arr))
+    return " ".join(res)
 
 class CycleGANModel(BaseModel):
     """
@@ -111,12 +114,10 @@ class CycleGANModel(BaseModel):
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
-        
         self.fake_B = self.netG_A(self.real_A)  # G_A(A)
         self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
         self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
-
 
     def backward_D_basic(self, netD, real, fake):
         """Calculate GAN loss for the discriminator
@@ -181,6 +182,8 @@ class CycleGANModel(BaseModel):
 
     def optimize_parameters(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
+        # f_freq = open("w_freq.txt", "a")
+        # f_bins = open("w_bins.txt", "a")
         # forward
         self.forward()      # compute fake images and reconstruction images.
         # G_A and G_B
@@ -194,3 +197,31 @@ class CycleGANModel(BaseModel):
         self.backward_D_A()      # calculate gradients for D_A
         self.backward_D_B()      # calculate graidents for D_B
         self.optimizer_D.step()  # update D_A and D_B's weights
+
+        #save G D weight
+        # params = np.array([])
+        # for param in self.netG_A.parameters():
+        #     params = np.concatenate((params.flatten(), param.data.cpu().detach().numpy().flatten() ))
+        # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=10)
+        # f_freq.write(np_to_str(n_s)+"\n")
+        # f_bins.write(np_to_str(bins)+"\n")
+        # for param in self.netG_B.parameters():
+        #     params = np.concatenate((params.flatten(), param.data.cpu().detach().numpy().flatten() ))
+        # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=10)
+        # f_freq.write(np_to_str(n_s)+"\n")
+        # f_bins.write(np_to_str(bins)+"\n")
+
+        # params = np.array([])
+        # for param in self.netD_A.parameters():
+        #     params = np.concatenate((params.flatten(), param.data.cpu().detach().numpy().flatten() ))
+        # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=10)
+        # f_freq.write(np_to_str(n_s)+"\n")
+        # f_bins.write(np_to_str(bins)+"\n")
+        # for param in self.netD_B.parameters():
+        #     params = np.concatenate((params.flatten(), param.data.cpu().detach().numpy().flatten() ))
+        # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=10)
+        # f_freq.write(np_to_str(n_s)+"\n")
+        # f_bins.write(np_to_str(bins)+"\n")
+        #
+        # f_freq.close()
+        # f_bins.close()

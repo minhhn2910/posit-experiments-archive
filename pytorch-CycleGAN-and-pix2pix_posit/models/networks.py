@@ -3,19 +3,16 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
-import time
+from torch.utils.cpp_extension import load
 
+import numpy as np
 ###############################################################################
 # Helper Functions
 ###############################################################################
-#INVBER=500000
-#BER = 6e-9
-BER = 5E-4
-import struct
-import numpy as np
-from ctypes import *
-import random
-from torch.utils.cpp_extension import load
+def np_to_str(arr):
+    res= list(map(lambda x: str(x), arr))
+    return " ".join(res)
+
 
 class Identity(nn.Module):
     def forward(self, x):
@@ -36,7 +33,7 @@ def get_norm_layer(norm_type='instance'):
     elif norm_type == 'instance':
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
     elif norm_type == 'none':
-        norm_layer = lambda x: Identity()
+        def norm_layer(x): return Identity()
     else:
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
@@ -50,14 +47,14 @@ def get_scheduler(optimizer, opt):
         opt (option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions．　
                               opt.lr_policy is the name of learning rate policy: linear | step | plateau | cosine
 
-    For 'linear', we keep the same learning rate for the first <opt.niter> epochs
-    and linearly decay the rate to zero over the next <opt.niter_decay> epochs.
+    For 'linear', we keep the same learning rate for the first <opt.n_epochs> epochs
+    and linearly decay the rate to zero over the next <opt.n_epochs_decay> epochs.
     For other schedulers (step, plateau, and cosine), we use the default PyTorch schedulers.
     See https://pytorch.org/docs/stable/optim.html for more details.
     """
     if opt.lr_policy == 'linear':
         def lambda_rule(epoch):
-            lr_l = 1.0 - max(0, epoch + opt.epoch_count - opt.niter) / float(opt.niter_decay + 1)
+            lr_l = 1.0 - max(0, epoch + opt.epoch_count - opt.n_epochs) / float(opt.n_epochs_decay + 1)
             return lr_l
         scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
     elif opt.lr_policy == 'step':
@@ -65,7 +62,7 @@ def get_scheduler(optimizer, opt):
     elif opt.lr_policy == 'plateau':
         scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, threshold=0.01, patience=5)
     elif opt.lr_policy == 'cosine':
-        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.niter, eta_min=0)
+        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.n_epochs, eta_min=0)
     else:
         return NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
     return scheduler
@@ -188,7 +185,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         than a full-image discriminator and can work on arbitrarily-sized images
         in a fully convolutional fashion.
 
-        [n_layers]: With this mode, you cna specify the number of conv layers in the discriminator
+        [n_layers]: With this mode, you can specify the number of conv layers in the discriminator
         with the parameter <n_layers_D> (default=3 as used in [basic] (PatchGAN).)
 
         [pixel]: 1x1 PixelGAN discriminator can classify whether a pixel is real or not.
@@ -318,22 +315,6 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
     else:
         return 0.0, None
 
-def refresh_tensor(ones, total_elements):
-    int_list = []
-    for i in range(ones):
-        indx = random.randint(0,31)
-        if (indx == 31): # signed int problem of pytorch tensor, no such type
-            int_list.append(-2147483648)
-        else:
-            int_list.append(1<<indx)
-    if (ones <32 ):
-        print (" refresh_tensor ",int_list)
-    else :
-        print ("refresh tensor ")
-    int_tensor = torch.zeros(total_elements, dtype=torch.int32)
-    for i in range(ones):
-        int_tensor[random.randint(0,total_elements-1)] = int_list[i]
-    return int_tensor.cuda()
 
 class ResnetGenerator(nn.Module):
     """Resnet-based generator that consists of Resnet blocks between a few downsampling/upsampling operations.
@@ -353,32 +334,14 @@ class ResnetGenerator(nn.Module):
             n_blocks (int)      -- the number of ResNet blocks
             padding_type (str)  -- the name of padding layer in conv layers: reflect | replicate | zero
         """
-        print ("resnet generator here ")
         assert(n_blocks >= 0)
         super(ResnetGenerator, self).__init__()
-        #self.custom_module = load(name='ber_uniform', sources=['/home/minh/isca_benchmarks/flip_bit_cuda.cpp', '/home/minh/isca_benchmarks/flip_bit_cuda_kernel.cu'])
-        self.custom_module = load(name='ber_uniform', sources=['/home/minh/benchmarks_posit/posit_cuda.cpp', '/home/minh/benchmarks_posit/posit_cuda_kernels.cu'])
-
-        import random
-        random.seed(42)
-        self.total_elements = 10000
-        total_bits = self.total_elements * 32
-        self.ones = int(total_bits*BER)#int(float(total_bits)/INVBER)
-        print ('total bits ', total_bits )
-        print ('one bits ', self.ones)
-        self.refresh_tensor = refresh_tensor
-        self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
-
-
-        self.num_flip_bits = self.ones
-
-        #self.rand_idx = torch.randperm(self.seed_tensor.nelement())
-        #self.seed_tensor = self.seed_tensor[self.rand_idx]
-
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
+
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/github/benchmarks_posit/posit_cuda.cpp', '/home/minh/github/benchmarks_posit/posit_cuda_kernels_improved.cu'])
 
         model = [nn.ReflectionPad2d(3),
                  nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
@@ -413,27 +376,47 @@ class ResnetGenerator(nn.Module):
 
     def forward(self, input):
         """Standard forward"""
-        #print ("forward")
         x = input
-        #self.seed_tensor = refresh_tensor(self.ones, self.total_elements)
-        #count = 0
-        #start_time = time.time()
-
+        # f=open('/tmp/cycle_gan_stat.txt','a')
+        # f_freq = open("act_G_cycle_freq.txt", "a")
+        # f_bins = open("act_G_cycle_bins.txt", "a")
+        #params = np.array([])
+        print ("call forward once ")
+        count = 0
         for item in self.model :
-            #count = count + 1
-            #if (count %10 == 0):
+            # if (x.is_contiguous() and x.is_floating_point()):
+            if isinstance(item, nn.Conv2d) or isinstance(item, nn.ConvTranspose2d):
+                count = count + 1
+                if (count < 5):
+                    x = self.custom_module.posit_wrapper(x)
+                    # f_freq = open("act_G_cycle_freq.txt", "a")
+                    # f_bins = open("act_G_cycle_bins.txt", "a")
 
-            if (x.is_contiguous() and x.is_floating_point()):
-                # x = self.custom_module.ber_wrapper(x,self.seed_tensor)
-                x = self.custom_module.ber_wrapper(x, self.seed_tensor)
+                    # print ("call me once ", count )
+
+                    # print (item)
+                    # params = x.cpu().detach().numpy().flatten()
+                    # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=20)
+                    # f_freq.write(np_to_str(n_s)+"\n")
+                    # f_bins.write(np_to_str(bins)+"\n")
+                    # f_freq.close()
+                    # f_bins.close()
+
+                #params = np.concatenate((params.flatten(), x.cpu().detach().numpy().flatten() ))
+                #f.write("%.3f, %.3f, %.3f, %.3f\n" % (max_x.cpu().detach().numpy(), min_x.cpu().detach().numpy() , std_x.cpu().detach().numpy() , mean_x.cpu().detach().numpy()))
+                #record statistics
             x = item(x)
-        #print (count)
-        #torch.cuda.synchronize()
-        #time_taken = time.time() - start_time
-        #print("Run-Time: %.4f s" % time_taken)
+
+        # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=10)
+        # f_freq.write(np_to_str(n_s)+"\n")
+        # f_bins.write(np_to_str(bins)+"\n")
+        # f_freq.close()
+        # f_bins.close()
+
 
         return x
-        #return self.model(input)
+
+#        return self.model(input)
 
 
 class ResnetBlock(nn.Module):
@@ -449,6 +432,7 @@ class ResnetBlock(nn.Module):
         """
         super(ResnetBlock, self).__init__()
         self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, use_dropout, use_bias)
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/github/benchmarks_posit/posit_cuda.cpp', '/home/minh/github/benchmarks_posit/posit_cuda_kernels_improved.cu'])
 
     def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias):
         """Construct a convolutional block.
@@ -492,7 +476,23 @@ class ResnetBlock(nn.Module):
 
     def forward(self, x):
         """Forward function (with skip connections)"""
-        out = x + self.conv_block(x)  # add skip connections
+        input = x
+        for item in self.conv_block:
+            if isinstance(item, nn.Conv2d) or isinstance(item, nn.ConvTranspose2d):
+                input = self.custom_module.posit_wrapper(input)
+                # f_freq = open("act_G_cycle_freq.txt", "a")
+                # f_bins = open("act_G_cycle_bins.txt", "a")
+                # print ("call me once " )
+                # print (item)
+                # params = input.cpu().detach().numpy().flatten()
+                # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=20)
+                # f_freq.write(np_to_str(n_s)+"\n")
+                # f_bins.write(np_to_str(bins)+"\n")
+                # f_freq.close()
+                # f_bins.close()
+            input = item(input)
+        out = x + input
+        #out = x + self.conv_block(x)  # add skip connections
         return out
 
 
@@ -546,7 +546,7 @@ class UnetSkipConnectionBlock(nn.Module):
             outermost (bool)    -- if this module is the outermost module
             innermost (bool)    -- if this module is the innermost module
             norm_layer          -- normalization layer
-            user_dropout (bool) -- if use dropout layers.
+            use_dropout (bool)  -- if use dropout layers.
         """
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
@@ -643,7 +643,25 @@ class NLayerDiscriminator(nn.Module):
 
     def forward(self, input):
         """Standard forward."""
-        return self.model(input)
+        x = input
+        # f=open('/tmp/cycle_gan_stat.txt','a')
+        # f_freq = open("act_D_cycle_freq.txt", "a")
+        # f_bins = open("act_D_cycle_bins.txt", "a")
+        # params = np.array([])
+        for item in self.model :
+            # if (x.is_contiguous() and x.is_floating_point()):
+                # params = np.concatenate((params.flatten(), x.cpu().detach().numpy().flatten() ))
+                #f.write("%.3f, %.3f, %.3f, %.3f\n" % (max_x.cpu().detach().numpy(), min_x.cpu().detach().numpy() , std_x.cpu().detach().numpy() , mean_x.cpu().detach().numpy()))
+                #record statistics
+            x = item(x)
+
+        # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=10)
+        # f_freq.write(np_to_str(n_s)+"\n")
+        # f_bins.write(np_to_str(bins)+"\n")
+        # f_freq.close()
+        # f_bins.close()
+        return x
+        #return self.model(input)
 
 
 class PixelDiscriminator(nn.Module):

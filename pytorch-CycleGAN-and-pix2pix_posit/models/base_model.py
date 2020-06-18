@@ -1,10 +1,13 @@
 import os
 import torch
+import torch.nn as nn
 from collections import OrderedDict
 from abc import ABC, abstractmethod
 from . import networks
-import struct
-from ctypes import *
+import numpy as np
+def np_to_str(arr):
+    res= list(map(lambda x: str(x), arr))
+    return " ".join(res)
 
 class BaseModel(ABC):
     """This class is an abstract base class (ABC) for models.
@@ -23,11 +26,11 @@ class BaseModel(ABC):
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
 
         When creating your custom class, you need to implement your own initialization.
-        In this fucntion, you should first call <BaseModel.__init__(self, opt)>
+        In this function, you should first call <BaseModel.__init__(self, opt)>
         Then, you need to define four lists:
             -- self.loss_names (str list):          specify the training losses that you want to plot and save.
-            -- self.model_names (str list):         specify the images that you want to display and save.
-            -- self.visual_names (str list):        define networks used in our training.
+            -- self.model_names (str list):         define networks used in our training.
+            -- self.visual_names (str list):        specify the images that you want to display and save.
             -- self.optimizers (optimizer list):    define and initialize optimizers. You can define one optimizer for each network. If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
         """
         self.opt = opt
@@ -96,27 +99,12 @@ class BaseModel(ABC):
                 net = getattr(self, 'net' + name)
                 net.eval()
 
-    #getting binary representatation of num
-    def binary(self,num):
-        #python2
-        #return ''.join(bin(ord(c)).replace('0b', '').rjust(8, '0') for c in struct.pack('!f', num))
-        return ''.join('{:0>8b}'.format(c) for c in struct.pack('!f', num))
-    def count_zerobit (self,data_arr):
-      total_bit = len(data_arr)*32
-      #print ("total_bit ", total_bit)
-      zero_bits = 0
-      for item in data_arr:
-        binary_form = self.binary(item)
-        zero_bits += binary_form.count('0')
-      return zero_bits/float(total_bit)
-
     def test(self):
         """Forward function used in test time.
 
         This function wraps <forward> function in no_grad() so we don't save intermediate steps for backprop
         It also calls <compute_visuals> to produce additional visualization results
         """
-
         with torch.no_grad():
             self.forward()
             self.compute_visuals()
@@ -208,63 +196,32 @@ class BaseModel(ABC):
                 if hasattr(state_dict, '_metadata'):
                     del state_dict._metadata
 
+
+
                 # patch InstanceNorm checkpoints prior to 0.4
                 for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
                     self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
                 net.load_state_dict(state_dict)
 
-        print ("hello testing example ")
-        print (self.model_names)
-        net = getattr(self, 'netG_A')
-        state_dict = net.state_dict()
-        weight_count = 0
-        #for name, param in state_dict.items():
-        #    print(name)
-
-        all_params = []
-        for param in net.parameters():
-            all_params.extend(param.data.cpu().numpy().flatten())
-        print ("total parameter ", len(all_params))
-        #print ("percentage of zero bits ",self.count_zerobit(all_params))
-        #print (net.module.seed_tensor)
-        state_dict = net.state_dict()
-        print ("injecting ber weight")
-
-        for name, param in state_dict.items():
-            weight_count = weight_count + 1
-            # if (weight_count%5 == 0):
-            #     net.module.seed_tensor = net.module.refresh_tensor(net.module.ones,net.module.total_elements)
-            #transformed_param = net.module.custom_module.posit_wrapper_weight(param, net.module.seed_tensor)
-            #net.module.seed_tensor = net.module.refresh_tensor(net.module.ones,net.module.total_elements)
-            #transformed_param = net.module.custom_module.ber_wrapper(param, net.module.seed_tensor)
-            transformed_param = net.module.custom_module.posit_wrapper_weight(param)
-            # Update the parameter.
-            state_dict[name].copy_(transformed_param)
-        print ("weight count ", weight_count)
-
-        print ("done preparing parameter")
-        '''
-        state_dict = net.state_dict()
-
-        for name, param in state_dict.items():
-          print(name)
-          numpy_arr = param.data.cpu().detach().numpy()
-          old_shape = numpy_arr.shape
-          numpy_arr_new = numpy_arr.flatten()
-          for i in range(len(numpy_arr_new)):
-            bits = cast(pointer(c_float(numpy_arr_new[i])), POINTER(c_int32)).contents.value
-            bits = bits & 0xfff00000
-            numpy_arr_new[i] = cast(pointer(c_int32(bits)), POINTER(c_float)).contents.value
-          transformed_param = torch.tensor(numpy_arr_new.reshape(old_shape))
-            # Update the parameter.
-          state_dict[name].copy_(transformed_param)
-        print ("done preparing parameter")
-        all_params = []
-        for param in net.parameters():
-            all_params.extend(param.data.cpu().numpy().flatten())
-        print ("total parameter ", len(all_params))
-        print ("percentage of zero bits ",self.count_zerobit(all_params))
-        '''
+                print ("measuring stats weight")
+                # params = np.array([])
+                # f_freq = open("act_W_cycle_freq.txt", "a")
+                # f_bins = open("act_W_cycle_bins.txt", "a")
+                # count = 0
+                for layer in net.modules():
+                    if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.ConvTranspose2d):
+                        print(layer)
+                        layer.weight =  net.custom_module.posit_wrapper_weight(layer.weight)
+                #        params =  layer.weight.cpu().detach().numpy().flatten()
+                #         (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=20)
+                #         f_freq.write(np_to_str(n_s)+"\n")
+                #         f_bins.write(np_to_str(bins)+"\n")
+                        # count = count +1
+                        # print ("hello ", count)
+                # f_freq.close()
+                # f_bins.close()
+                # exit()
+                print ("done generating weight histogram ")
 
 
     def print_networks(self, verbose):

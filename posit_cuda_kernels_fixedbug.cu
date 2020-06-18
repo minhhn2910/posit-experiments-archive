@@ -14,7 +14,7 @@
 #define FP16_LIMB_SIZE 16
 #define FP16_TYPE uint16_t
 
-#define _G_NBITS 8
+#define _G_NBITS 10
 #define _G_ESIZE 2
 
 #define SIGN_MASK 0x8000
@@ -577,7 +577,12 @@ __device__ __inline__ float fp16tofp32_gpu(fp16 p) {
 
   // get regime
   v.ui = p << POSIT_LENGTH_PLUS_ONE;
-  int regime_length = (__clz(v.ui) & -!regime_sign) + (__clz(~v.ui) & -regime_sign);
+  //int regime_length = (__clz(v.ui) & -!regime_sign) + (__clz(~v.ui) & -regime_sign);
+  int regime_length;
+  if(regime_sign)
+    regime_length = (__clz(~v.ui));
+  else
+    regime_length = (__clz(v.ui));
   int regime = (regime_length - regime_sign) << _G_ESIZE;
   regime = (regime ^ -regime_sign) + regime_sign;
 
@@ -601,9 +606,16 @@ __device__ __inline__ fp16 fp32tofp16_gpu(float f) {
   bool sign = v.ui & FLOAT_SIGN_MASK;
   v.ui &= 0x7FFFFFFF;
 
-  p = _G_MAXREALP & -(v.si >= _G_MAXREAL_INT);
-  p = _G_INFP & -(v.si >= FLOAT_INF);
-  p = _G_MINREALP & -(v.si <= _G_MINREAL_INT);
+#ifdef FLOAT_ROUNDING
+	uint16_t roundSign = sign << 15;
+	if(v.ui > _G_MAXREAL_INT)
+		return _G_INFP | roundSign;
+	if(v.ui < _G_MINREAL_INT)
+		return 0;
+#endif
+  p ^= (p ^_G_MAXREALP) & -(v.si >= _G_MAXREAL_INT);
+  p ^= (p ^ _G_INFP) & -(v.si >= FLOAT_INF);
+  p ^= (p ^ _G_MINREALP) & -(v.si != 0 && v.si <= _G_MINREAL_INT);
 
   // min posit exponent in 16, 3 is 112
   // therefore all the float subnormals will be handled
@@ -629,7 +641,7 @@ __device__ __inline__ fp16 fp32tofp16_gpu(float f) {
 #if _G_NBITS != 16
   temp_p <<= _G_POSIT_SHIFT_AMOUNT;
 #endif
-  p = temp_p & -((v.si < _G_MAXREAL_INT) & (v.si > _G_MINREAL_INT));
+  p ^= (temp_p ^ p) & -((v.si < _G_MAXREAL_INT) & (v.si > _G_MINREAL_INT));
 
   p = (p ^ -sign) + sign;
 
