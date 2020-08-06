@@ -341,7 +341,7 @@ class ResnetGenerator(nn.Module):
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
 
-        self.custom_module = load(name='ber_uniform', sources=['/home/minh/github/benchmarks_posit/posit_cuda.cpp', '/home/minh/github/benchmarks_posit/posit_cuda_kernels_improved.cu'])
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/github/pytorch-posit/posit_cuda.cpp', '/home/minh/github/pytorch-posit/posit_cuda_kernels_improved.cu'])
 
         model = [nn.ReflectionPad2d(3),
                  nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
@@ -432,7 +432,7 @@ class ResnetBlock(nn.Module):
         """
         super(ResnetBlock, self).__init__()
         self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, use_dropout, use_bias)
-        self.custom_module = load(name='ber_uniform', sources=['/home/minh/github/benchmarks_posit/posit_cuda.cpp', '/home/minh/github/benchmarks_posit/posit_cuda_kernels_improved.cu'])
+        self.custom_module = load(name='ber_uniform', sources=['/home/minh/github/pytorch-posit/posit_cuda.cpp', '/home/minh/github/pytorch-posit/posit_cuda_kernels_improved.cu'])
 
     def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias):
         """Construct a convolutional block.
