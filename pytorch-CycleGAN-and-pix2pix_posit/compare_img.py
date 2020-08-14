@@ -199,7 +199,7 @@ def calculate_ssim(img1,
         ssims.append(_ssim(img1[..., i], img2[..., i]))
     return np.array(ssims).mean()
 
-def main(path1, path2):
+def main(path1, path2, fake=False):
 
     # read images as 2D arrays (convert to grayscale for simplicity)
     #img1 = imread(file1).astype(float).flatten()
@@ -207,7 +207,10 @@ def main(path1, path2):
     # compare
     img_list1 = get_file_list(path1)
     img_list2 = get_file_list(path2)
-
+    print (fake)
+    if (fake):
+        img_list1 = list(filter(lambda k: 'fake' in k, img_list1)) 
+        img_list2 = list(filter(lambda k: 'fake' in k, img_list2)) 
     #print (img_list1[:])
     #print (img_list2[:10])
     print (len(img_list1)," ", len(img_list2))
@@ -216,7 +219,7 @@ def main(path1, path2):
             if item not in img_list2:
                 #print ("bingo")
                 img_list1.remove(item)
-
+    print (len(img_list1)," ", len(img_list2))
     avg_rel_err=[]
     psnr = []
     ssim = []
@@ -237,4 +240,8 @@ def main(path1, path2):
 
 if __name__ == '__main__':
     arguments = sys.argv[1:]
-    main(arguments[0],arguments[1])
+    #print (arguments)
+    fake = False
+    if (len(arguments) == 3):
+        fake=True #only process image name with *fake*, use for cycle gan test output
+    main(arguments[0],arguments[1], fake)
