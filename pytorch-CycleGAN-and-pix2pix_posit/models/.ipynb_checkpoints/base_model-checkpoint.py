@@ -7,14 +7,22 @@ from . import networks
 import numpy as np
 import qtorch
 from qtorch.quant import posit_quantize, float_quantize
+from qtorch.quant import new_format_quantize, act_format_quantize, configurable_table_quantize
 def np_to_str(arr):
     res= list(map(lambda x: str(x), arr))
     return " ".join(res)
 
+def my_quant_table (x, table):
+    return configurable_table_quantize(x,table, scale=1.0 )
 def my_quant (x):
-    #return x
-    return float_quantize(x, exp=5, man=10, rounding="nearest")
-    #return posit_quantize(x, nsize=6, es=1)
+    return x
+    #return new_format_quantize(x)
+    #return posit_quantize(x, nsize=8, es=1,scale=8.0)
+
+def my_quant_16 (x):
+    return x
+    #return new_format_quantize(x)
+    #return posit_quantize(x, nsize=16, es=1)
 
 
 
@@ -88,17 +96,21 @@ class BaseModel(ABC):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         pass
 
-    def setup(self, opt):
+    def setup(self, opt, table=[]):
         """Load and print networks; create schedulers
 
         Parameters:
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
+        
         if self.isTrain:
             self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
         if not self.isTrain or opt.continue_train:
             load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
-            self.load_networks(load_suffix)
+            if (len(table) == 0):
+                self.load_networks(load_suffix)
+            else :
+                self.load_networks_table(load_suffix, table = table)
         self.print_networks(opt.verbose)
 
     def eval(self):
@@ -185,6 +197,64 @@ class BaseModel(ABC):
         else:
             self.__patch_instance_norm_state_dict(state_dict, getattr(module, key), keys, i + 1)
 
+    def load_networks_table(self, epoch, table=[]):
+        """Load all the networks from the disk.
+
+        Parameters:
+            epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
+        """
+        if (len(table) == 0): 
+            print ("null lookup table, something is wrong")
+            exit(0)
+        else: 
+            print(table)
+            torch_table = torch.tensor(table, dtype=torch.float)
+        for name in self.model_names:
+            if isinstance(name, str):
+                load_filename = '%s_net_%s.pth' % (epoch, name)
+                load_path = os.path.join(self.save_dir, load_filename)
+                net = getattr(self, 'net' + name)
+                if isinstance(net, torch.nn.DataParallel):
+                    net = net.module
+                #print('loading the model from %s' % load_path)
+                # if you are using PyTorch newer than 0.4 (e.g., built from
+                # GitHub source), you can remove str() on self.device
+                state_dict = torch.load(load_path, map_location=str(self.device))
+                if hasattr(state_dict, '_metadata'):
+                    del state_dict._metadata
+
+
+
+                # patch InstanceNorm checkpoints prior to 0.4
+                for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
+                    self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
+                net.load_state_dict(state_dict)
+
+                #print ("measuring stats weight")
+                # params = np.array([])
+                #f_freq = open("w_freq.txt", "a")
+                #f_bins = open("w_bins.txt", "a")
+                count = 0
+                for layer in net.modules():
+                    if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.ConvTranspose2d):
+                        print(layer)
+                        if (count != 0 and count<=22):
+                            layer.weight.data =  my_quant_table(layer.weight.data, torch_table)
+                        else:
+                            layer.weight.data =  my_quant_16(layer.weight.data)
+                        #params =  layer.weight.data.cpu().detach().numpy().flatten()
+                        #(n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=20)
+                        #f_freq.write(np_to_str(n_s)+"\n")
+                        #f_bins.write(np_to_str(bins)+"\n")
+                        count = count +1
+                        
+                        #print ("hello ", count)
+                #f_freq.close()
+                #f_bins.close()
+                # exit()
+                print ("count layers ", count)
+                print ("done generating weight histogram ")
+
     def load_networks(self, epoch):
         """Load all the networks from the disk.
 
@@ -216,20 +286,25 @@ class BaseModel(ABC):
                 # params = np.array([])
                 #f_freq = open("w_freq.txt", "a")
                 #f_bins = open("w_bins.txt", "a")
-                # count = 0
+                count = 0
                 for layer in net.modules():
                     if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.ConvTranspose2d):
                         print(layer)
-                        layer.weight.data =  my_quant(layer.weight.data)
+                        if (count != 0 and count<=22):
+                            layer.weight.data =  my_quant(layer.weight.data)
+                        else:
+                            layer.weight.data =  my_quant_16(layer.weight.data)
                         #params =  layer.weight.data.cpu().detach().numpy().flatten()
                         #(n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=20)
                         #f_freq.write(np_to_str(n_s)+"\n")
                         #f_bins.write(np_to_str(bins)+"\n")
-                        # count = count +1
-                        # print ("hello ", count)
+                        count = count +1
+                        
+                        #print ("hello ", count)
                 #f_freq.close()
                 #f_bins.close()
                 # exit()
+                print ("count layers ", count)
                 print ("done generating weight histogram ")
 
 
@@ -244,6 +319,7 @@ class BaseModel(ABC):
             if isinstance(name, str):
                 net = getattr(self, 'net' + name)
                 num_params = 0
+
                 for param in net.parameters():
                     num_params += param.numel()
                 if verbose:

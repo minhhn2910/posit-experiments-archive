@@ -7,27 +7,34 @@ from torch.utils.cpp_extension import load
 
 from qtorch.quant import Quantizer, quantizer
 from qtorch import Posit, FloatingPoint
+from qtorch import PositTanhModule, PositTanhModuleEnhanced, RefTanhModule
 import qtorch
-from qtorch.quant import posit_quantize, float_quantize
+from qtorch.quant import posit_quantize, float_quantize, posit_sigmoid, posit_tanh, posit_tanh_enhanced
+from qtorch.quant import new_format_quantize, act_format_quantize
 # define two floating point formats
 #bit_8 = FloatingPoint(exp=5, man=2)
 #bit_8 = Posit(nsize=16, es=2)
-
+#MyModule = PositTanhModuleEnhanced
+MyModule = nn.Tanh
 
 #act_quant = lambda : Identity()#Quantizer(forward_number=bit_8, backward_number=bit_8,
                      #   forward_rounding="nearest", backward_rounding="nearest")
 
 def my_quant (x):
-    #return x
-    #return float_quantize(x, exp=5, man=10, rounding="nearest")
-    return posit_quantize(x, nsize=6, es=1)
+    return x
+    #return new_format_quantize(x, scale = 1/64.0)
+    #return float_quantize(x, exp=4, man=1)
+    #return posit_quantize(x, nsize=8, es=1)
 def acc_quant (x): #for accumulator # the result of convolution
-    #return float_quantize(x, exp=2, man=3, rounding="nearest")
-    return posit_quantize(x, nsize=16, es=1)
+    return x
+    #return act_format_quantize(x)
+    #return float_quantize(x, exp=6, man=9)
+    #return posit_quantize(x, nsize=16, es=1)
 
 def my_quant16 (x): #for accumulator # the result of convolution
-    #return float_quantize(x, exp=2, man=3, rounding="nearest")
-    return posit_quantize(x, nsize=16, es=1)
+    return x
+    #return float_quantize(x, exp=6, man=9)
+    #return posit_quantize(x, nsize=16, es=1)
 
 import numpy as np
 ###############################################################################
@@ -394,7 +401,9 @@ class ResnetGenerator(nn.Module):
                       nn.ReLU(True)]
         model += [nn.ReflectionPad2d(3)]
         model += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-        model += [nn.Tanh()]
+        #model += [nn.Tanh()]
+        model += [MyModule()]
+        #model += [PositTanhModuleEnhanced()]
 
         self.model = nn.Sequential(*model)
 
@@ -411,8 +420,8 @@ class ResnetGenerator(nn.Module):
             # if (x.is_contiguous() and x.is_floating_point()):
             if isinstance(item, nn.Conv2d) or isinstance(item, nn.ConvTranspose2d):
                 count = count + 1
-                
-                if (count <= 5 and count >1):
+                #x = my_quant(x)
+                if (count <= 6 and count >1):
                     x = my_quant(x)
                 else:
                     x = my_quant16(x)
@@ -434,9 +443,16 @@ class ResnetGenerator(nn.Module):
                 #f.write("%.3f, %.3f, %.3f, %.3f\n" % (max_x.cpu().detach().numpy(), min_x.cpu().detach().numpy() , std_x.cpu().detach().numpy() , mean_x.cpu().detach().numpy()))
                 #record statistics
                 x = item(x)
-                #x = acc_quant(x)
+                x = acc_quant(x)
+            #elif isinstance(item, nn.Tanh):
+            #    print ('tanh layer')
+            #    x = nn.Tanh#tanh(x.cpu(),nsize=16,es=0)
+                #x = item(x)
             else:
+                x = acc_quant(x)
                 x = item(x)
+                x = acc_quant(x)
+                
 
         # (n_s,bins) =  np.histogram(np.log2(np.absolute(params[params != 0])), bins=10)
         # f_freq.write(np_to_str(n_s)+"\n")
@@ -444,7 +460,7 @@ class ResnetGenerator(nn.Module):
         # f_freq.close()
         # f_bins.close()
 
-
+        #print (count)
         return x
 
         #return self.model(input)
@@ -521,7 +537,12 @@ class ResnetBlock(nn.Module):
                 #f_bins.write(np_to_str(bins)+"\n")
                 #f_freq.close()
                 #f_bins.close()
-            input = item(input)
+                input = item(input)
+                input = acc_quant(input)
+            else:
+                input = my_quant16(input)
+                input = item(input)
+                input = my_quant16(input)
         out = x + input
         #out = x + self.conv_block(x)  # add skip connections
         return out
