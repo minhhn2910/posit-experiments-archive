@@ -328,8 +328,8 @@ if __name__ == '__main__':
     #print (test_table(opt, original_table))
     #original_table = np.delete(original_table,remove_4[:4])
     #print (test_table(opt, original_table))
-
-    original_table = np.array([2.3438E-02 ,8.2029E-02, 1.4062E-01, 5.0000E-01])
+    original_table = np.array ([0.023438, 0.070312, 0.10547,  0.14062 , 0.1875 ,  0.25   ,  0.5   ,   0.75   ])
+    #original_table = np.array([2.3438E-02 ,8.2029E-02, 1.4062E-01, 5.0000E-01])
     
     print (test_table(opt, original_table))
     exit(0)

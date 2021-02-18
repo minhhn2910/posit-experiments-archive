@@ -8,12 +8,29 @@ import numpy as np
 import qtorch
 from qtorch.quant import posit_quantize, float_quantize
 from qtorch.quant import new_format_quantize, act_format_quantize, configurable_table_quantize
+import math
+
+act_table_global = []
+
 def np_to_str(arr):
     res= list(map(lambda x: str(x), arr))
     return " ".join(res)
+def filter_arr(arr, elem, tol=1e-5):
+    filter_arr = []
+    for item in arr : 
+        if math.isclose(elem, item, abs_tol=tol):
+            filter_arr.append(item)
+    return filter_arr
 
+weight_data  = np.array([])
+act_data  = np.array([])
 def my_quant_table (x, table):
-    return configurable_table_quantize(x,table, scale=1.0 )
+    global weight_data
+    temp = configurable_table_quantize(x,table, scale=1.0 )
+    #numpy_data = temp.cpu().numpy()
+    #print (numpy_data.shape)
+    #weight_data = np.hstack([weight_data,numpy_data.flatten()])
+    return temp
 def my_quant (x):
     return x
     #return new_format_quantize(x)
@@ -23,8 +40,36 @@ def my_quant_16 (x):
     return x
     #return new_format_quantize(x)
     #return posit_quantize(x, nsize=16, es=1)
+    
+def linear_activation(input):
+    global act_data
+    global act_table_global 
+    '''
+    temp_input = input.cpu().detach().numpy()
+    freq,bins = np.histogram(temp_input, bins=20)
+    print ("---- activation hist ---- ")
+    print (list(freq))
+    print (list(bins))
+    #return input
+    f = open("act_freq.txt", "a")
+    for item in freq:
+        f.write("%d "% item)
+    f.write("\n")
+    f.close()
 
+    f = open("act_bin.txt", "a")
+    for item in bins:
+        f.write("%f "% item)
+    f.write("\n")
+    f.close()    
+    '''
+    #temp = act_format_quantize(input)
+    #minhhn acts only
+    temp = configurable_table_quantize(input, act_table_global, scale= 1.0)
+    return temp
 
+def forward_pre_hook_linear(m, input):
+    return (linear_activation(input[0]),) 
 
 class BaseModel(ABC):
     """This class is an abstract base class (ABC) for models.
@@ -96,7 +141,7 @@ class BaseModel(ABC):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         pass
 
-    def setup(self, opt, table=[]):
+    def setup(self, opt, table=[], act_table = []):
         """Load and print networks; create schedulers
 
         Parameters:
@@ -110,7 +155,7 @@ class BaseModel(ABC):
             if (len(table) == 0):
                 self.load_networks(load_suffix)
             else :
-                self.load_networks_table(load_suffix, table = table)
+                self.load_networks_table(load_suffix, table = table, act_table = act_table)
         self.print_networks(opt.verbose)
 
     def eval(self):
@@ -197,18 +242,23 @@ class BaseModel(ABC):
         else:
             self.__patch_instance_norm_state_dict(state_dict, getattr(module, key), keys, i + 1)
 
-    def load_networks_table(self, epoch, table=[]):
+    def load_networks_table(self, epoch, table=[] , act_table  = []):
         """Load all the networks from the disk.
 
         Parameters:
             epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
         """
+        global act_table_global 
         if (len(table) == 0): 
             print ("null lookup table, something is wrong")
             exit(0)
         else: 
             print(table)
             torch_table = torch.tensor(table, dtype=torch.float)
+            torch_table_act = torch.tensor(act_table, dtype=torch.float )
+            act_table_global = torch_table_act
+            print ("set torch table _act" )
+            print (act_table_global)
         for name in self.model_names:
             if isinstance(name, str):
                 load_filename = '%s_net_%s.pth' % (epoch, name)
@@ -240,6 +290,8 @@ class BaseModel(ABC):
                         print(layer)
                         if (count != 0 and count<=22):
                             layer.weight.data =  my_quant_table(layer.weight.data, torch_table)
+                            if(len(act_table) > 0 ):
+                                layer.register_forward_pre_hook(forward_pre_hook_linear)
                         else:
                             layer.weight.data =  my_quant_16(layer.weight.data)
                         #params =  layer.weight.data.cpu().detach().numpy().flatten()
@@ -253,7 +305,26 @@ class BaseModel(ABC):
                 #f_bins.close()
                 # exit()
                 print ("count layers ", count)
+                print ("weight shape ", len(weight_data))
+
+                #weight_table = [0.275395, 0.023438 ,0.076174, 0.12891,  0.42188 ]
+                weight_table = sorted(table)
+                print (weight_table)
+                hist_positive = []
+                hist_negative = []
+                #print (weight_data[:100])
+                for item in weight_table:
+                   
+                    hist_positive.append(len(filter_arr(weight_data, item, tol = min(weight_table)/2.0)))
+                    hist_negative.append(len(filter_arr(weight_data, -item, tol = min(weight_table)/2.0)))
+                    #hist_positive.append(len(weight_data[weight_data == item ]))
+                    #hist_negative.append(len(weight_data[weight_data == -item]))
+                print (sum(hist_positive), " ", sum(hist_negative), " ", sum(hist_positive) + sum(hist_negative))
+                print (hist_positive)
+                print (hist_negative)
+                
                 print ("done generating weight histogram ")
+                
 
     def load_networks(self, epoch):
         """Load all the networks from the disk.

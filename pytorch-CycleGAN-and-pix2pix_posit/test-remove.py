@@ -321,6 +321,7 @@ if __name__ == '__main__':
     remove_16 = [11, 9, 7, 5, 4, 2, 0, 3, 1, 6, 8, 14, 12, 22, 20, 10, 15, 16, 21, 13, 17, 19, 25, 18, 24, 23, 26, 29, 27, 30, 31, 28]
     remove_8 = [1, 2, 9, 4, 3, 5, 8, 7, 10, 6, 15, 13, 0, 14, 12, 11]
     remove_4 = [5, 7, 6, 4, 3, 2, 1, 0]
+    
     original_table = np.delete(original_table,remove_16[:16])
     #print (test_table(opt, original_table))
     
