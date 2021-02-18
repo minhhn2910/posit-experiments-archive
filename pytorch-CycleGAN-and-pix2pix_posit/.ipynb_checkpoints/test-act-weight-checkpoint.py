@@ -319,9 +319,12 @@ if __name__ == '__main__':
     activation_table = np.array([ 1.0/1024, 1.0/512, 1.0/256, 1.0/128, 1.0/64, 1.0/32, 1.0/16, 1.0/8, 3.0/16,
                                1.0/4, 5.0/16, 3.0/8, 7.0/16, 1.0/2, 9.0/16, 5.0/8, 3.0/4, 7.0/8, 1.0, 9.0/8, 5.0/4, 3.0/2,
                                7.0/4, 2.0, 9.0/4, 3.0, 4.0, 6.0, 8.0, 16.0, 32, 64])
+    act_remove = [2, 3, 1, 0, 4, 5, 23, 14, 13, 10, 6, 12, 11, 19, 9, 22, 8, 7, 15, 17, 21, 18, 16, 20, 24, 27, 25, 26, 28, 30, 29, 31]
+    activation_table = np.delete(activation_table,act_remove[:16])
     print (test_table(opt, original_table, activation_table))
-    #exit(0)
+    exit(0)
     res_remove = []
+    
     for i in range(len(activation_table)):
         temp_table = np.copy(activation_table)
         temp_table = np.delete(temp_table,i)

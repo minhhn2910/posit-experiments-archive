@@ -315,21 +315,90 @@ if __name__ == '__main__':
     opt = TestOptions().parse()  # get test options
     print (opt.results_dir)
     
-    original_table = np.array([0.023438, 0.070312, 0.10547 , 0.14062 , 0.1875,   0.25 ,    0.5  ,    0.75])
+    weight_table = np.array([0.023438, 0.070312, 0.10547 , 0.14062 , 0.1875,   0.25 ,    0.5  ,    0.75])
     activation_table = np.array([ 1.0/1024, 1.0/512, 1.0/256, 1.0/128, 1.0/64, 1.0/32, 1.0/16, 1.0/8, 3.0/16,
                                1.0/4, 5.0/16, 3.0/8, 7.0/16, 1.0/2, 9.0/16, 5.0/8, 3.0/4, 7.0/8, 1.0, 9.0/8, 5.0/4, 3.0/2,
                                7.0/4, 2.0, 9.0/4, 3.0, 4.0, 6.0, 8.0, 16.0, 32, 64])
     act_remove = [2, 3, 1, 0, 4, 5, 23, 14, 13, 10, 6, 12, 11, 19, 9, 22, 8, 7, 15, 17, 21, 18, 16, 20, 24, 27, 25, 26, 28, 30, 29, 31]
     activation_table = np.delete(activation_table,act_remove[:16])
-    print (test_table(opt, original_table, activation_table))
-    exit(0)
+    print (test_table(opt, weight_table, activation_table))
+ 
     res_remove = []
     
-    for i in range(len(activation_table)):
-        temp_table = np.copy(activation_table)
-        temp_table = np.delete(temp_table,i)
-        res_remove.append(test_table(opt, original_table ,temp_table))
-        print (res_remove)
+    original_table = activation_table
     
-        
+    print (test_table(opt, weight_table, original_table))
+
+    current_table = np.copy(original_table)
+    temp_table  = np.copy(original_table)
+    min_remove = 0
+    max_remove = 1
+    count_loop = 0
+
+    while((max_remove - min_remove) >0.002 and count_loop < 100 ):
+        count_loop = count_loop + 1
+        res_remove = []
+        res_add  = []
+        print ("remove experiment ", count_loop)
+        for i in range(len(current_table)):
+            temp_table = np.copy(current_table)
+            temp_table = np.delete(temp_table,i)
+            temp_res = test_table(opt, weight_table,temp_table)
+            res_remove.append(temp_res) 
+
+        print ("add experiment ", count_loop)
+        current_table_add = np.copy(current_table)
+        current_table_add = np.insert(current_table_add, 0, 0)
+        print (current_table_add)
+        for i in range(len(current_table)+1):
+            temp_table = np.copy(current_table_add)#torch.tensor(current_table_add, dtype = torch.float)
+
+            val1 = val2 = 0
+            if(i == 0):
+                val1 = 0
+            else:
+                val1 = current_table[i-1]
+            if (i == len(current_table)):
+                val2 = max(current_table)*2
+            else:
+                val2 = current_table[i]
+            temp_table[0] = (val1 + val2)/2.0
+            temp_res = test_table(opt, weight_table, temp_table)
+
+            res_add.append(temp_res)
+
+        remove_idx = np.argmax(res_remove) 
+        add_idx = np.argmax(res_add)
+        if (remove_idx == add_idx):
+            res_remove = np.delete(res_remove,remove_idx)
+            remove_idx = np.argmax(res_remove)
+        print (" remove %d add %d "%(remove_idx, add_idx))   
+        min_remove = min (res_remove)
+        max_remove = max (res_remove)
+        with open('log.txt', 'a') as f:
+            for item in res_add:
+                f.write("%.4f "%(item))
+            f.write("\n")
+            for item in res_remove:
+                f.write("%.4f "%(item))
+            f.write("\n")
+            f.write(" remove %d add %d \n"%(remove_idx, add_idx))  
+
+        val1 = val2 = 0
+        if(add_idx == 0):
+            val1 = 0
+        else:
+            val1 = current_table[add_idx-1]
+        if (add_idx == len(current_table)):
+            val2 = max(current_table)*2
+        else:
+            val2 = current_table[add_idx]          
+        current_table = np.insert (current_table, len(current_table), (val1 + val2)/2.0  )
+        print ("added ", current_table)
+        current_table = np.delete (current_table, remove_idx )
+        current_table = np.sort(current_table)
+        with open('table_log.txt', 'a') as f:
+            for item in current_table:
+                f.write("%.4E "%(item))
+            f.write("\n")      
 
