@@ -8,3 +8,5 @@ Design:
 * Main operation: modified pytorch inference of cycle gan :  
   * /pytorch-CycleGAN-and-pix2pix_posit/models/networks.py line 428 for activation
   * /pytorch-CycleGAN-and-pix2pix_posit/models/base_model.py line 239 for weights 
+
+Training and Inference of CycleGAN still remains the same as in the `/pytorch-CycleGAN-and-pix2pix_posit/README.md` and notebook CycleGan.ipynb

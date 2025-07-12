@@ -21,20 +21,20 @@ MyModule = nn.Tanh
                      #   forward_rounding="nearest", backward_rounding="nearest")
 
 def my_quant (x):
-    return x
+    # return x
     #return new_format_quantize(x, scale = 1/64.0)
     #return float_quantize(x, exp=4, man=1)
-    #return posit_quantize(x, nsize=8, es=1)
+    return posit_quantize(x, nsize=8, es=1)
 def acc_quant (x): #for accumulator # the result of convolution
-    return x
+    # return x
     #return act_format_quantize(x)
     #return float_quantize(x, exp=6, man=9)
-    #return posit_quantize(x, nsize=16, es=1)
+    return posit_quantize(x, nsize=16, es=1)
 
 def my_quant16 (x): #for accumulator # the result of convolution
-    return x
+    # return x
     #return float_quantize(x, exp=6, man=9)
-    #return posit_quantize(x, nsize=16, es=1)
+    return posit_quantize(x, nsize=16, es=1)
 
 import numpy as np
 ###############################################################################

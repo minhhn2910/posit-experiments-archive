@@ -32,40 +32,22 @@ def my_quant_table (x, table):
     #weight_data = np.hstack([weight_data,numpy_data.flatten()])
     return temp
 def my_quant (x):
-    return x
+    # return x
     #return new_format_quantize(x)
-    #return posit_quantize(x, nsize=8, es=1,scale=8.0)
+    return posit_quantize(x, nsize=8, es=1,scale=8.0)
 
 def my_quant_16 (x):
-    return x
+    # return x
     #return new_format_quantize(x)
-    #return posit_quantize(x, nsize=16, es=1)
+    return posit_quantize(x, nsize=16, es=1)
     
 def linear_activation(input):
     global act_data
     global act_table_global 
-    '''
-    temp_input = input.cpu().detach().numpy()
-    freq,bins = np.histogram(temp_input, bins=20)
-    print ("---- activation hist ---- ")
-    print (list(freq))
-    print (list(bins))
-    #return input
-    f = open("act_freq.txt", "a")
-    for item in freq:
-        f.write("%d "% item)
-    f.write("\n")
-    f.close()
 
-    f = open("act_bin.txt", "a")
-    for item in bins:
-        f.write("%f "% item)
-    f.write("\n")
-    f.close()    
-    '''
-    #temp = act_format_quantize(input)
+    temp = posit_quantize(input, nsize=16, es=1)
     #minhhn acts only
-    temp = configurable_table_quantize(input, act_table_global, scale= 1.0)
+    # temp = configurable_table_quantize(input, act_table_global, scale= 1.0)
     return temp
 
 def forward_pre_hook_linear(m, input):
@@ -289,7 +271,8 @@ class BaseModel(ABC):
                     if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.ConvTranspose2d):
                         print(layer)
                         if (count != 0 and count<=22):
-                            layer.weight.data =  my_quant_table(layer.weight.data, torch_table)
+                            # layer.weight.data =  my_quant_table(layer.weight.data, torch_table)
+                            layer.weight.data =  my_quant(layer.weight.data)
                             if(len(act_table) > 0 ):
                                 layer.register_forward_pre_hook(forward_pre_hook_linear)
                         else:
